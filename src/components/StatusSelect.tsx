@@ -28,7 +28,7 @@ export default function StatusSelect({ value, onChange, disabled }: StatusSelect
   const current = statusOptions.find(o => o.value === value) || statusOptions[0];
 
   return (
-    <Select value={value} onValueChange={(val) => onChange(val as LeadStatus)} disabled={disabled}>
+    <Select value={value} onValueChange={(val) => val && onChange(val as LeadStatus)} disabled={disabled}>
       <SelectTrigger className="w-[140px] h-9 text-xs bg-zinc-900 border-white/5 rounded-xl">
         <SelectValue>
           <Badge variant="outline" className={`border ${current.color} rounded-lg text-[10px] uppercase tracking-wider`}>
