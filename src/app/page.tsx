@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PlaceResult, LeadStats } from '@/types';
+import { PlaceResult, LeadStats, LeadStatus } from '@/types';
 import SearchModal from '@/components/SearchModal';
 import PlaceList from '@/components/PlaceList';
 import StatsBar from '@/components/StatsBar';
@@ -114,7 +114,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSave = async (place: PlaceResult, status: 'novo' | 'excluido' = 'novo') => {
+  const handleSave = async (place: PlaceResult, status: LeadStatus = 'novo') => {
     setProcessingIds(prev => new Set(prev).add(place.place_id));
     try {
       const response = await fetch('/api/leads', {
@@ -131,7 +131,12 @@ export default function DashboardPage() {
         return next;
       });
       
-      toast.success(status === 'novo' ? 'Lead salvo com sucesso!' : 'Lead ignorado.');
+      const successMessages: Record<string, string> = {
+        novo: 'Lead salvo com sucesso!',
+        excluido: 'Lead ignorado.',
+        contatado: 'Lead marcado como contatado!'
+      };
+      toast.success(successMessages[status] || 'Lead atualizado!');
       fetchStatsAndConfig(); // Atualizar stats após salvar
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Erro ao salvar lead');
