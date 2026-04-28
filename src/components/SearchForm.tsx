@@ -124,7 +124,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         {/* Nota */}
         <div className="space-y-2">
           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Avaliação Mín.</label>
-          <Select value={minStars} onValueChange={setMinStars} disabled={isLoading}>
+          <Select value={minStars} onValueChange={(val) => setMinStars(val || '0')} disabled={isLoading}>
             <SelectTrigger className="h-12 bg-zinc-900 border-white/5 rounded-2xl pl-10 relative">
               <Star className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500/50" />
               <SelectValue placeholder="Nota" />
@@ -140,7 +140,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         {/* Horário De */}
         <div className={cn("space-y-2 transition-opacity duration-300", !filtrarHorario && "opacity-30 pointer-events-none")}>
           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Abre a partir de</label>
-          <Select value={horaInicio} onValueChange={setHoraInicio} disabled={isLoading || !filtrarHorario}>
+          <Select value={horaInicio} onValueChange={(val) => setHoraInicio(val || '00:00')} disabled={isLoading || !filtrarHorario}>
             <SelectTrigger className="h-12 bg-zinc-900 border-white/5 rounded-2xl pl-10 relative">
               <Clock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500/50" />
               <SelectValue placeholder="De" />
@@ -156,7 +156,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         {/* Horário Até */}
         <div className={cn("space-y-2 transition-opacity duration-300", !filtrarHorario && "opacity-30 pointer-events-none")}>
           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Aberto até</label>
-          <Select value={horaFim} onValueChange={setHoraFim} disabled={isLoading || !filtrarHorario}>
+          <Select value={horaFim} onValueChange={(val) => setHoraFim(val || '23:59')} disabled={isLoading || !filtrarHorario}>
             <SelectTrigger className="h-12 bg-zinc-900 border-white/5 rounded-2xl pl-10 relative">
               <Clock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500/50" />
               <SelectValue placeholder="Até" />
@@ -173,7 +173,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         {/* Leads */}
         <div className="space-y-2">
           <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 ml-1">Qtd. Leads</label>
-          <Select value={quantidade} onValueChange={setQuantidade} disabled={isLoading}>
+          <Select value={quantidade} onValueChange={(val) => setQuantidade(val || '10')} disabled={isLoading}>
             <SelectTrigger className="h-12 bg-zinc-900 border-white/5 rounded-2xl pl-10 relative">
               <Hash className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500/50" />
               <SelectValue placeholder="Leads" />
