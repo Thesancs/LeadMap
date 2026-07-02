@@ -5,14 +5,14 @@ import { Lead, LeadStatus, LeadStats } from '@/types';
 import StatsBar from '@/components/StatsBar';
 import LeadsTable from '@/components/LeadsTable';
 import { toast } from 'sonner';
-import { Loader2, RefreshCcw, Filter, Users } from 'lucide-react';
+import { Download, Loader2, RefreshCcw, Filter, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<(LeadStats & { respondidos?: number }) | null>(null);
-  const [messageTemplate, setMessageTemplate] = useState('');
+  const [config, setConfig] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<LeadStatus | 'todos'>('todos');
 
@@ -36,7 +36,7 @@ export default function LeadsPage() {
 
       setLeads(leadsData.leads);
       setStats(statsData);
-      setMessageTemplate(configData.mensagem);
+      setConfig(configData.config);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha ao carregar dados';
       toast.error(message);
@@ -67,6 +67,10 @@ export default function LeadsPage() {
     }
   };
 
+  const handleExport = () => {
+    window.location.href = `/api/leads/export?status=${filter}`;
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-10 pb-20 px-4 pt-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -82,15 +86,25 @@ export default function LeadsPage() {
             Gerencie seu funil de vendas e acompanhe o engajamento de cada contato.
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          className="bg-zinc-900 border-white/10 hover:bg-zinc-800 text-white gap-2 h-12 px-6 rounded-xl"
-          onClick={() => { setIsLoading(true); fetchData(); }} 
-          disabled={isLoading}
-        >
-          <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Atualizar Lista
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            className="bg-zinc-900 border-white/10 hover:bg-zinc-800 text-white gap-2 h-12 px-6 rounded-xl"
+            onClick={handleExport}
+          >
+            <Download className="h-4 w-4" />
+            Exportar CSV
+          </Button>
+          <Button 
+            variant="outline" 
+            className="bg-zinc-900 border-white/10 hover:bg-zinc-800 text-white gap-2 h-12 px-6 rounded-xl"
+            onClick={() => { setIsLoading(true); fetchData(); }} 
+            disabled={isLoading}
+          >
+            <RefreshCcw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Atualizar Lista
+          </Button>
+        </div>
       </div>
 
       {stats && <StatsBar stats={stats} />}
@@ -126,7 +140,7 @@ export default function LeadsPage() {
             <LeadsTable 
               leads={leads} 
               onStatusChange={handleStatusChange}
-              messageTemplate={messageTemplate}
+              config={config}
             />
           </div>
         )}

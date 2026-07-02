@@ -3,6 +3,17 @@ export const dynamic = 'force-dynamic';
 import { searchPlaces } from '@/lib/places';
 import { supabaseAdmin } from '@/lib/supabase';
 
+async function recordSearch(query: string, cidade: string, totalFound: number, filteredOut: number) {
+  await supabaseAdmin.from('search_history').insert({
+    query,
+    cidade,
+    total_found: totalFound,
+    filtered_out: filteredOut,
+  }).then(({ error: historyError }) => {
+    if (historyError) console.error('Erro ao registrar histórico de busca:', historyError.message);
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { setor, cidade, minStars, quantidade, horaInicio, horaFim } = await req.json();
@@ -20,6 +31,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Buscar no Google Places
     let results = await searchPlaces(query, maxResults);
+    const rawTotalFound = results.length;
 
     // Incrementar contador de buscas no Supabase
     await supabaseAdmin.rpc('increment_search_count');
@@ -42,6 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (results.length === 0) {
+      await recordSearch(query, cidade, 0, 0);
       return NextResponse.json({
         places: [],
         total_found: 0,
@@ -62,6 +75,7 @@ export async function POST(req: NextRequest) {
       console.error('Erro ao consultar leads existentes:', error);
       // Mesmo com erro no DB, retornamos os resultados do Google para não travar a busca,
       // mas logamos o erro. No MVP, decidimos filtrar se possível.
+      await recordSearch(query, cidade, results.length, 0);
       return NextResponse.json({
         places: results,
         total_found: results.length,
@@ -73,11 +87,14 @@ export async function POST(req: NextRequest) {
     
     // Filtrar apenas os que NÃO existem no banco
     const filteredResults = results.filter((r) => !existingIds.has(r.place_id));
+    const filteredOut = results.length - filteredResults.length;
+
+    await recordSearch(query, cidade, rawTotalFound, filteredOut);
 
     return NextResponse.json({
       places: filteredResults,
       total_found: results.length,
-      filtered_out: results.length - filteredResults.length,
+      filtered_out: filteredOut,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro interno no servidor';

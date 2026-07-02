@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Settings, Map } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Map, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import { User } from '@supabase/supabase-js';
@@ -21,6 +21,7 @@ export default function Navbar({ user }: { user: User | null }) {
   const navItems = [
     { label: 'Dashboard', href: '/', icon: LayoutDashboard },
     { label: 'Meus Leads', href: '/leads', icon: Users },
+    { label: 'WhatsApp Pro', href: '/whatsapp', icon: MessageSquare },
     { label: 'Configurações', href: '/config', icon: Settings },
   ];
 

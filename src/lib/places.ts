@@ -62,6 +62,9 @@ export async function searchPlaces(query: string, maxResults: number = 20): Prom
     }
 
     const data = await response.json();
+    if (!Array.isArray(data.places)) {
+      console.warn('[places] campo "places" ausente ou inválido na resposta:', JSON.stringify(data).slice(0, 200));
+    }
     const places = data.places || [];
     allPlaces.push(...places);
     

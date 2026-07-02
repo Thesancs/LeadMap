@@ -1,0 +1,428 @@
+# LeadMap — System Design Document
+
+> v1.0 · 2025 · Confidencial — Uso Interno (All In Holding)
+
+---
+
+## Metadados
+
+| Campo        | Valor                              |
+|--------------|------------------------------------|
+| Produto      | LeadMap (antes: Viralize)          |
+| Empresa      | All In Holding                     |
+| Repositório  | github.com/Thesancs/LeadMap        |
+| Deploy       | lead-map-psi.vercel.app            |
+| Versão       | 1.0 — MVP Fase 1                   |
+| Status       | Em desenvolvimento                 |
+
+---
+
+## 1. Visão Geral do Sistema
+
+### 1.1 Objetivo
+
+LeadMap é uma plataforma de prospecção B2B interna desenvolvida para a holding All In. O objetivo principal é encontrar, qualificar e gerenciar leads de restaurantes e pequenas empresas (PMEs) com vistas à venda do produto **EnergyZapp** — solução de automação de atendimento via WhatsApp com inteligência artificial.
+
+A ferramenta é operada pelos SDRs (Sales Development Representatives) da equipe, que usam o sistema para:
+
+- Descobrir estabelecimentos por cidade e nicho via Google Places API
+- Qualificar o perfil de cada lead com score de fit gerado por IA
+- Iniciar abordagens personalizadas via WhatsApp Web com 1 clique
+- Gerenciar o pipeline de prospecção com status de acompanhamento
+
+### 1.2 Contexto de Negócio
+
+O LeadMap **não é um SaaS** (no MVP) — é uma ferramenta interna. Não há multi-tenancy, billing ou onboarding de clientes. O produto-alvo de venda é o EnergyZapp, e o LeadMap é o instrumento que alimenta o funil.
+
+### 1.3 Usuário-Alvo
+
+| Perfil             | Necessidade                                    | Resultado Esperado                                          |
+|--------------------|------------------------------------------------|-------------------------------------------------------------|
+| SDR (Sales Dev Rep)| Encontrar e contatar leads rapidamente         | Abrir conversas no WhatsApp com mensagem personalizada      |
+| Gestor / Founder   | Visibilidade do pipeline de prospecção         | Contadores e status atualizados em tempo real               |
+
+---
+
+## 2. Fases do Produto
+
+### 2.1 Fase 1 — MVP (Google Maps)
+
+> **Escopo do MVP**
+
+- Buscar estabelecimentos por cidade/nicho via Google Places API (New — v1)
+- Filtrar duplicatas usando Supabase como fonte da verdade
+- Salvar leads com status: `novo` / `contatado` / `fechado` / `perdido`
+- Exibir contadores: total de leads, contatados, fechados
+- Gerar mensagem de abordagem personalizada com GPT-4o-mini (1 clique)
+- Abrir WhatsApp Web via link `wa.me` pré-preenchido (sem backend)
+- Tela `/config` para editar o template de mensagem padrão
+
+### 2.2 Fase 2 — Gestão de Números WhatsApp
+
+- Conectar múltiplos números via QR Code usando Evolution API
+- Status por instância: `conectado` / `desconectado` / `em aquecimento`
+- Barra de progresso do protocolo de aquecimento (14 dias)
+- Atribuição de número por SDR com rodízio automático
+- Aquecimento automatizado via n8n: entrar em grupos, delays aleatórios de 2–5 min
+
+### 2.3 Fase 3 — Prospecção Multicanal + Multi-Agentes
+
+- Instagram via Apify Instagram Profile Scraper
+- LinkedIn via Apify LinkedIn Profile/Company Scraper
+- 4 agentes em pipeline: **Scraper → Enrichment → SDR → CRM**
+- Schema padronizado entre agentes com `fit_score` e `pain_points`
+- Stack de agentes: CrewAI (Python) ou n8n Agentic (sub-workflows)
+- CRM Agent salva no Supabase e dispara via Evolution API
+
+---
+
+## 3. Stack Tecnológica
+
+| Camada          | Tecnologia                          | Notas                              |
+|-----------------|-------------------------------------|------------------------------------|
+| Framework       | Next.js 15 (App Router)             | TypeScript, SSR/RSC                |
+| Linguagem       | TypeScript                          | Strict mode                        |
+| UI              | Tailwind CSS + shadcn/ui            | Sem Zustand no MVP                 |
+| Banco           | Supabase (PostgreSQL)               | RLS a ativar pós-MVP               |
+| Busca de Leads  | Google Places API (New v1)          | Billing cap obrigatório            |
+| IA / Qualificação | GPT-4o-mini                       | Sanitizar dados antes do prompt    |
+| Scraping Social | Apify (Instagram + LinkedIn)        | Fase 3                             |
+| WhatsApp        | Evolution API (multi-instância)     | Fase 2+                            |
+| Orquestração    | Puro código no MVP                  | n8n na Fase 2+                     |
+| Deploy          | Vercel                              | CI/CD automático via GitHub        |
+
+### Decisões de Arquitetura (Descartados)
+
+> ⚠️ Itens intencionalmente removidos do escopo
+
+- **Mapa visual** (Leaflet / Maps embed) — lista com filtros resolve o fluxo sem custo adicional
+- **Zustand** — server state via React Server Components basta pro MVP
+- **Kanban** — SDRs usam CRM próprio externo
+- **Autenticação complexa** — single-user no MVP, sem NextAuth ou Clerk
+
+---
+
+## 4. Arquitetura do Sistema
+
+### 4.1 Fluxo de Dados
+
+```
+LeadMap (Next.js)
+  ├── /api/places/search  →  Google Places API (New v1)
+  ├── /api/leads          →  Supabase (CRUD + deduplicação)
+  ├── /api/ai/message     →  GPT-4o-mini
+  ├── wa.me redirect      →  WhatsApp Web (sem backend)
+  ├── [Fase 2] webhook    →  n8n → Evolution API (multi-instância)
+  └── [Fase 3] webhook    →  n8n → Apify → Instagram / LinkedIn
+```
+
+### 4.2 Estrutura de Diretórios
+
+```
+src/
+  app/                          → App Router (Next.js 15)
+    (dashboard)/                → Layout principal com sidebar
+      page.tsx                  → Listagem de leads + filtros
+      leads/[id]/page.tsx       → Detalhe do lead
+    config/
+      page.tsx                  → Configurações e template de mensagem
+    api/
+      places/search/route.ts    → Busca Google Places
+      leads/route.ts            → CRUD de leads (Supabase)
+      leads/[id]/route.ts       → Patch de status individual
+      ai/message/route.ts       → Geração de mensagem (GPT-4o-mini)
+      config/route.ts           → GET/PUT configurações
+
+  components/
+    leads/                      → LeadCard, LeadTable, LeadFilters
+    search/                     → SearchBar, CitySelect, NicheSelect
+    ui/                         → shadcn/ui re-exports
+
+  lib/
+    supabase.ts                 → Client singleton Supabase
+    places.ts                   → Wrapper Google Places API
+    openai.ts                   → Wrapper GPT-4o-mini
+    utils.ts                    → Helpers gerais
+
+  types/
+    lead.ts                     → Interface Lead e enums de status
+    places.ts                   → Types Google Places response
+```
+
+---
+
+## 5. Schema de Dados (Supabase / PostgreSQL)
+
+### 5.1 Tabela: `leads`
+
+| Campo        | Tipo         | Obrigatório | Descrição                                        |
+|--------------|--------------|-------------|--------------------------------------------------|
+| `id`         | uuid         | PK          | Gerado pelo Supabase                             |
+| `place_id`   | text         | Sim         | ID único do Google Places **(dedup key)**        |
+| `name`       | text         | Sim         | Nome do estabelecimento                          |
+| `phone`      | text         | Não         | Telefone (formatado)                             |
+| `address`    | text         | Não         | Endereço completo                                |
+| `website`    | text         | Não         | URL do site                                      |
+| `rating`     | numeric      | Não         | Nota no Google (0–5)                             |
+| `types`      | text[]       | Não         | Array de tipos (`restaurant`, `café`…)           |
+| `status`     | text         | Sim         | `novo` \| `contatado` \| `fechado` \| `perdido` |
+| `source`     | text         | Sim         | `google_places` \| `instagram` \| `linkedin`    |
+| `notes`      | text         | Não         | Observações do SDR                               |
+| `fit_score`  | integer      | Não         | 1–10, gerado por IA (Fase 3)                     |
+| `pain_points`| text[]       | Não         | Dores identificadas pela IA (Fase 3)             |
+| `created_at` | timestamptz  | Auto        | Timestamp de criação                             |
+| `updated_at` | timestamptz  | Auto        | Timestamp de atualização                         |
+
+> **Constraint:** `UNIQUE(place_id)` — deduplicação via `upsert` no Supabase.
+
+### 5.2 Tabela: `config`
+
+| Campo              | Tipo        | Obrigatório | Descrição                              |
+|--------------------|-------------|-------------|----------------------------------------|
+| `id`               | uuid        | PK          | Gerado pelo Supabase                   |
+| `message_template` | text        | Sim         | Template de mensagem de abordagem      |
+| `updated_at`       | timestamptz | Auto        | Timestamp de atualização               |
+
+### 5.3 Schema Enriquecido (Fase 3 — Multi-Agentes)
+
+```typescript
+interface EnrichedProfile {
+  fit_score:      number;       // 1–10
+  pain_points:    string[];     // ex: ['sem presença digital', 'atendimento lento']
+  suggested_hook: string;       // mensagem sugerida pelo SDR Agent
+}
+
+interface AgentPayload {
+  lead_id:          string;
+  source:           'google_places' | 'instagram' | 'linkedin';
+  raw_data:         Record<string, unknown>;
+  enriched_profile: EnrichedProfile;
+}
+```
+
+---
+
+## 6. API Routes (Next.js App Router)
+
+| Endpoint             | Método | Params / Body                        | Resposta            |
+|----------------------|--------|--------------------------------------|---------------------|
+| `/api/places/search` | GET    | `?query=restaurante&city=Campinas`   | `{ places: Place[] }` |
+| `/api/leads`         | GET    | `?status=novo&limit=50`              | `{ leads: Lead[] }` |
+| `/api/leads`         | POST   | `{ place_id, name, phone… }`         | `{ lead: Lead }`    |
+| `/api/leads/[id]`    | PATCH  | `{ status, notes }`                  | `{ lead: Lead }`    |
+| `/api/ai/message`    | POST   | `{ lead: Lead, template: string }`   | `{ message: string }` |
+| `/api/config`        | GET    | —                                    | `{ config: Config }` |
+| `/api/config`        | PUT    | `{ message_template: string }`       | `{ config: Config }` |
+
+---
+
+## 7. Fluxo Principal do Usuário (Fase 1)
+
+### 7.1 Busca e Captação de Leads
+
+1. SDR acessa a tela principal (`/`)
+2. Informa cidade (ex: Campinas) e nicho (ex: restaurante)
+3. Front chama `GET /api/places/search` com os parâmetros
+4. API Route consulta Google Places API (New v1) e retorna lista
+5. Front exibe cards com nome, telefone, endereço e nota
+6. SDR seleciona leads relevantes e clica em **"Salvar Lead"**
+7. Front chama `POST /api/leads` — deduplicação via `place_id` no Supabase
+
+### 7.2 Abordagem via WhatsApp
+
+1. SDR seleciona um lead salvo
+2. Clica em **"Gerar Mensagem"** → front chama `POST /api/ai/message`
+3. GPT-4o-mini preenche o template com dados do lead
+4. Mensagem gerada aparece em preview
+5. SDR clica em **"Abrir WhatsApp"** → front monta URL `wa.me` com mensagem encodada
+6. WhatsApp Web abre com mensagem pré-preenchida (sem backend)
+7. SDR envia e atualiza status do lead para `contatado` via `PATCH /api/leads/[id]`
+
+---
+
+## 8. Convenções de Código
+
+### 8.1 Padrões Gerais
+
+- TypeScript strict — sem `any` implícito
+- Nomenclatura: `camelCase` para variáveis, `PascalCase` para componentes, `SCREAMING_SNAKE` para constantes
+- Imports absolutos via `@` alias (ex: `@/lib/supabase`)
+- Server Components por padrão — `'use client'` apenas quando necessário
+- Mutations via Server Actions ou API Routes — nunca direto do cliente
+
+### 8.2 Exemplo de API Route
+
+```typescript
+// src/app/api/leads/route.ts
+import { createClient } from '@/lib/supabase';
+import { NextResponse } from 'next/server';
+
+export async function POST(req: Request) {
+  const body = await req.json();
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('leads')
+    .upsert({ ...body }, { onConflict: 'place_id' })
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error }, { status: 500 });
+  return NextResponse.json({ lead: data }, { status: 201 });
+}
+```
+
+### 8.3 Comandos de Desenvolvimento
+
+| Comando               | Descrição                                        |
+|-----------------------|--------------------------------------------------|
+| `npm run dev`         | Servidor local em `localhost:3000`               |
+| `npm run build`       | Build de produção — validar antes de PR          |
+| `npm run lint`        | ESLint — corrigir warnings antes de commit       |
+| `npm run type-check`  | `tsc --noEmit` — checar tipos sem buildar        |
+
+---
+
+## 9. Segurança e Riscos
+
+### 9.1 Riscos Mapeados
+
+| Risco                                    | Severidade | Mitigação                                                    |
+|------------------------------------------|------------|--------------------------------------------------------------|
+| API routes sem autenticação              | 🔴 Alta    | Adicionar middleware de token simples (env var) pós-MVP      |
+| Dados do lead no prompt (injection)      | 🔴 Alta    | Sanitizar e truncar dados antes de enviar ao LLM             |
+| Google Places sem billing cap            | 🟡 Média   | Configurar quota máxima no Google Cloud Console              |
+| Supabase sem RLS                         | 🔴 Alta    | Ativar Row Level Security após estabilizar schema            |
+| Sem rate limit nas routes                | 🟡 Média   | Usar Vercel Edge Middleware com rate-limit básico             |
+
+### 9.2 Boundaries
+
+**✅ SEMPRE fazer**
+- Validar e sanitizar inputs antes de usar em prompts LLM
+- Usar variáveis de ambiente para todas as chaves de API (`.env.local`)
+- Rodar `npm run lint` e `npm run build` antes de fazer commit
+- Manter `place_id` como constraint `UNIQUE` no Supabase
+
+**🟡 PERGUNTAR ANTES de fazer**
+- Mudanças no schema do Supabase (migrations)
+- Adicionar novas dependências npm
+- Alterar estrutura de diretórios do App Router
+- Integrar novos serviços externos (Apify, Evolution API)
+
+**❌ NUNCA fazer**
+- Commitar chaves de API, secrets ou tokens no repositório
+- Enviar dados PII do lead diretamente no prompt sem sanitização
+- Remover validações de input sem aprovação
+- Usar `any` implícito em TypeScript sem justificativa
+
+---
+
+## 10. Critérios de Sucesso por Fase
+
+### Fase 1 — MVP
+
+| Critério                                                          | Métrica       | Status   |
+|-------------------------------------------------------------------|---------------|----------|
+| Busca retorna leads em < 3s para query simples                    | < 3000ms P95  | ⏳ Pendente |
+| Deduplicação via `place_id` sem duplicatas no Supabase            | 0 duplicatas  | ⏳ Pendente |
+| Geração de mensagem personalizada em < 5s                         | < 5000ms P95  | ⏳ Pendente |
+| Link `wa.me` abre WhatsApp Web com mensagem pré-preenchida        | Funcional     | ⏳ Pendente |
+| Status do lead atualiza sem reload da página                      | UX fluido     | ⏳ Pendente |
+| Template editável em `/config` persiste no Supabase               | Persistência OK | ⏳ Pendente |
+
+### Fase 2 — WhatsApp
+
+- QR Code gera e conecta instância Evolution API em < 60s
+- Barra de progresso de aquecimento atualiza diariamente
+- Rodízio de números distribui mensagens uniformemente entre instâncias
+
+### Fase 3 — Multi-Agentes
+
+- Scraper Agent retorna dados brutos de Instagram/LinkedIn em < 30s
+- Enrichment Agent gera `fit_score` e `pain_points` coerentes com o nicho
+- Schema `AgentPayload` é consistente entre todos os agentes do pipeline
+
+---
+
+## 11. Roadmap de Implementação
+
+### Fase 1 — Tasks Prioritárias
+
+- [ ] Setup: variáveis de ambiente (`.env.local`) + Supabase migrations
+- [ ] API Route: `GET /api/places/search` → Google Places New v1
+- [ ] Supabase: tabelas `leads` e `config` com constraint `UNIQUE(place_id)`
+- [ ] UI: `SearchBar` + `NicheSelect` + `CitySelect`
+- [ ] UI: `LeadCard` com botão "Salvar Lead" → `POST /api/leads`
+- [ ] UI: `LeadTable` com filtro de status + contadores
+- [ ] API Route: `POST /api/ai/message` → GPT-4o-mini
+- [ ] UI: Modal de geração de mensagem + link `wa.me`
+- [ ] UI: PATCH de status (dropdown por card)
+- [ ] Tela `/config`: editar e salvar template de mensagem
+
+### Fase 2 — Tasks de Alto Nível
+
+- [ ] Integração Evolution API: endpoint de criação de instância + QR Code
+- [ ] UI de gerenciamento de instâncias com status em tempo real
+- [ ] n8n workflow de aquecimento com delays aleatórios
+- [ ] Lógica de rodízio de números por SDR
+
+---
+
+## 12. Questões Abertas
+
+| Questão                                                        | Impacto | Decisão Necessária                                        |
+|----------------------------------------------------------------|---------|-----------------------------------------------------------|
+| Autenticação: token simples (env) ou NextAuth?                 | Médio   | Pós-MVP, mas antes de compartilhar com equipe             |
+| Stack de agentes: CrewAI (Python) ou n8n Agentic?             | Alto    | Fase 3 — avaliar custo de infra Python vs simplicidade n8n |
+| Números VoIP: Nvoip ou Telein para produção?                  | Médio   | Fase 2 — testar latência e custo por mensagem             |
+| RLS Supabase: quando ativar sem quebrar MVP?                   | Alto    | Ativar antes de expor a outros usuários                   |
+| Leaflet/OSM: reimplementar mapa ou manter lista?               | Baixo   | Avaliar após feedback dos SDRs sobre UX da lista          |
+
+---
+
+---
+
+## 13. Addendum de Reconciliação — Estado Atual do Código
+
+> Atualizado em 2026-06-25 durante auditoria AIOX. Este addendum preserva o SDD v1.0 como baseline histórico e registra os deltas já presentes no repositório.
+
+### 13.1 Escopo Implementado Além do MVP
+
+O código atual já inclui capacidades planejadas para Fase 2 e parte da preparação multicanal:
+
+- Gestão de instâncias WhatsApp via Evolution API em `/whatsapp`
+- Criação de instância, QR Code, atualização/exclusão e consulta de status
+- Warmup com progresso diário e ajuste gradual de limite
+- Envio por instância específica e envio com rodízio automático
+- Histórico de chats e mensagens persistido em Supabase
+- Vínculo entre chat WhatsApp e lead
+- Templates separados para WhatsApp, Instagram e LinkedIn
+- Exportação CSV de leads e histórico de buscas
+
+### 13.2 Contratos de API Atualizados
+
+Alguns contratos implementados diferem do SDD v1.0:
+
+| Área | SDD v1.0 | Implementação atual |
+|------|----------|---------------------|
+| Busca Places | `GET /api/places/search?query=&city=` | `POST /api/places/search` com `{ setor, cidade, minStars, quantidade, horaInicio, horaFim }` |
+| Config | `PUT /api/config` com `message_template` | `POST /api/config` com chave/valor: `mensagem_padrao`, `ig_template`, `li_template`, limites WA |
+| Lead | Campos em inglês (`name`, `phone`, `address`) | Campos em português (`nome`, `telefone`, `endereco`, `site`, `categoria`) |
+| Status | `novo`, `contatado`, `fechado`, `perdido` | `novo`, `contatado`, `respondido`, `sem_interesse`, `fechado`, `excluido` |
+
+### 13.3 Segurança Atualizada
+
+- APIs de produto passam pelo middleware Supabase e retornam `401` quando não há usuário autenticado.
+- RLS está habilitado nas tabelas documentadas pelas migrations, com acesso anon bloqueado.
+- O cron de warmup usa `CRON_SECRET` via bearer token.
+- O webhook da Evolution API usa `EVOLUTION_WEBHOOK_SECRET` em produção, aceitando `Authorization: Bearer <secret>` ou `x-webhook-secret`.
+- A geração de mensagem por OpenAI sanitiza e trunca dados do lead e template antes de montar o prompt.
+
+### 13.4 Dívidas Pendentes
+
+- Formalizar as histórias de produto retroativas para as features já implementadas.
+- Converter este addendum em um SDD v2 completo quando o roadmap da Fase 2 for aprovado.
+- Documentar variáveis de ambiente e execução de migrations em runbook operacional.
+- Validar assinatura oficial da Evolution API se houver suporte nativo além do segredo compartilhado.
+
+*LeadMap SDD v1.0 · All In Holding · Confidencial*

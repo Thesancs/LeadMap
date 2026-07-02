@@ -19,6 +19,7 @@ export interface Lead extends PlaceResult {
   status: LeadStatus;
   created_at: string;
   updated_at: string;
+  whatsapp_jid?: string | null;
 }
 
 export interface LeadStats {
@@ -30,3 +31,4 @@ export interface LeadStats {
   fechados: number;
   requisicoes: number;
 }
+export * from './whatsapp';

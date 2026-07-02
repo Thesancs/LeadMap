@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { supabaseAdmin } from '@/lib/supabase';
+import type { LeadStatus } from '@/types';
+
+const VALID_STATUSES: LeadStatus[] = ['novo', 'contatado', 'respondido', 'sem_interesse', 'fechado', 'excluido'];
 
 export async function GET(req: NextRequest) {
   try {
@@ -58,7 +61,7 @@ export async function POST(req: NextRequest) {
         categoria: leadData.categoria,
         horario_abertura: leadData.horario_abertura,
         fotos: leadData.fotos || [],
-        status: leadData.status || 'novo',
+        status: VALID_STATUSES.includes(leadData.status) ? leadData.status : 'novo',
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'place_id'

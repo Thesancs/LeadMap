@@ -1,26 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const { data, error } = await supabaseAdmin
+      .from('leads')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Lead não encontrado' }, { status: 404 });
+      }
+      throw error;
+    }
+
+    return NextResponse.json({ lead: data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro ao buscar lead';
+    console.error('Erro ao buscar lead:', error);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const { status } = await req.json();
-
-    const validStatus = ['novo', 'contatado', 'respondido', 'sem_interesse', 'fechado', 'excluido'];
-    if (!status || !validStatus.includes(status)) {
-      return NextResponse.json(
-        { error: 'Status inválido ou não fornecido.' },
-        { status: 400 }
-      );
-    }
+    const updates = await req.json();
 
     const { data, error } = await supabaseAdmin
       .from('leads')
       .update({ 
-        status,
+        ...updates,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)

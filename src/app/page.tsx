@@ -7,7 +7,16 @@ import PlaceList from '@/components/PlaceList';
 import StatsBar from '@/components/StatsBar';
 import WhatsAppModal from '@/components/WhatsAppModal';
 import { toast } from 'sonner';
-import { Info, Sparkles, LayoutDashboard } from 'lucide-react';
+import { Clock3, Info, Sparkles, LayoutDashboard } from 'lucide-react';
+
+interface SearchHistoryItem {
+  id: string;
+  query: string;
+  cidade: string | null;
+  total_found: number;
+  filtered_out: number;
+  created_at: string;
+}
 
 export default function DashboardPage() {
   const [results, setResults] = useState<PlaceResult[]>([]);
@@ -17,6 +26,7 @@ export default function DashboardPage() {
   const [messageTemplate, setMessageTemplate] = useState('');
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [isMsgModalOpen, setIsMsgModalOpen] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
   const [globalStats, setGlobalStats] = useState<LeadStats>({
     buscados: 0,
     salvos: 0,
@@ -40,16 +50,28 @@ export default function DashboardPage() {
       }
       if (configRes.ok) {
         const data = await configRes.json();
-        setMessageTemplate(data.mensagem);
+        setMessageTemplate(data.config?.mensagem_padrao || data.mensagem || '');
       }
     } catch (err) {
       console.error('Erro ao buscar dados iniciais', err);
     }
   };
 
+  const fetchSearchHistory = async () => {
+    try {
+      const response = await fetch('/api/search-history?limit=5');
+      if (!response.ok) return;
+      const data = await response.json();
+      setSearchHistory(data.searches ?? []);
+    } catch (err) {
+      console.error('Erro ao buscar histórico', err);
+    }
+  };
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStatsAndConfig();
+    fetchSearchHistory();
 
     // Recuperar última pesquisa do localStorage
     const savedResults = localStorage.getItem('last_search_results');
@@ -106,6 +128,7 @@ export default function DashboardPage() {
         toast.success(`${resData.places.length} novos leads encontrados!`);
       }
       fetchStatsAndConfig(); // Atualizar contador de buscas
+      fetchSearchHistory();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao realizar busca';
       toast.error(message);
@@ -190,6 +213,26 @@ export default function DashboardPage() {
       <StatsBar stats={globalStats} />
 
       {/* Search Results Section */}
+      {searchHistory.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-zinc-300 font-bold">
+            <Clock3 className="h-4 w-4 text-primary" />
+            Últimas buscas
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            {searchHistory.map((item) => (
+              <div key={item.id} className="border border-white/5 bg-zinc-900/30 rounded-xl p-3">
+                <p className="text-sm font-bold text-zinc-100 truncate">{item.query}</p>
+                <p className="text-xs text-zinc-500 mt-1">{item.total_found} encontrados</p>
+                <p className="text-[10px] text-zinc-600 mt-2">
+                  {new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         <div className="flex items-center justify-between border-b border-white/5 pb-4">
           <div className="flex items-center gap-2">
